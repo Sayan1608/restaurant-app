@@ -1,0 +1,26 @@
+# Local secrets and environment overrides
+.env
+.env.*
+!.env.example
+**/.env.local
+**/.env.*.local
+**/.env
+**/.env.*
+!**/.env.example
+
+# Java / Maven
+**/target/
+*.class
+
+# Node / Next.js
+**/node_modules/
+**/.next/
+**/out/
+**/coverage/
+npm-debug.log*
+
+# IDE and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
