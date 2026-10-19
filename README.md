@@ -41,6 +41,10 @@ A single-restaurant food ordering MVP built as a Spring Boot API, a Next.js web 
 
 The repository may already have a root `.env` containing the OpenRouter key. Do not overwrite it when copying examples; add only the missing database settings. Spring Boot imports this file on the server, and Compose uses it for variable substitution. `.env.example` files contain placeholders, not credentials.
 
+## Development sample data
+
+The initial Flyway migration creates the schema without inserting application data. To load a small sample restaurant and menu locally, set `SPRING_PROFILES_ACTIVE=development` in the backend terminal before starting Spring Boot. The profile is opt-in and creates no accounts or passwords. The seed is safe to run again; it skips the sample restaurant if it already exists. Do not activate this profile in production.
+
 ## Environment variables
 
 | Variable | Purpose |
@@ -58,5 +62,7 @@ Use a strong unique password outside local development. The OpenRouter key is re
 - Next.js App Router scaffold with TypeScript, Tailwind CSS, and npm.
 - PostgreSQL Compose service with a named data volume and health check.
 - Only the health and OpenAPI routes are publicly accessible in the backend scaffold. Business APIs and authentication are added in later plan steps.
+- Initial Flyway schema and JPA model for users, restaurants, categories, menu items, orders, and immutable order-item price/name snapshots.
 
 See [plan.md](plan.md) for the incremental build sequence and [AGENTS.md](AGENTS.md) for repository implementation standards.
+See [docs/data-model.md](docs/data-model.md) for the schema diagram and modeling decisions.
