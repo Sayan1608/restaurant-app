@@ -52,6 +52,8 @@ The initial Flyway migration creates the schema without inserting application da
 | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_PORT` | Local Compose database configuration |
 | `DATABASE_URL`, `DATABASE_USERNAME`, `DATABASE_PASSWORD` | Backend datasource when run outside Docker |
 | `NEXT_PUBLIC_API_BASE_URL` | Browser-visible backend base URL |
+| `APP_CORS_ALLOWED_ORIGIN` | The single permitted browser origin for credentialed API requests (defaults to `http://localhost:3000`) |
+| `APP_SESSION_COOKIE_SECURE` | Set to `true` behind HTTPS; keep `false` for local HTTP |
 | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` | Reserved for the planned server-side chatbot integration; never expose the key through `NEXT_PUBLIC_*` or frontend code |
 
 Use a strong unique password outside local development. The OpenRouter key is read only by the backend and is never sent to the browser.
@@ -61,8 +63,10 @@ Use a strong unique password outside local development. The OpenRouter key is re
 - Spring Boot 3.x API scaffold with PostgreSQL, Flyway, Spring Security, Actuator, validation, and OpenAPI dependencies.
 - Next.js App Router scaffold with TypeScript, Tailwind CSS, and npm.
 - PostgreSQL Compose service with a named data volume and health check.
-- Only the health and OpenAPI routes are publicly accessible in the backend scaffold. Business APIs and authentication are added in later plan steps.
+- Customer registration, login, logout, current-user endpoint, server-side BCrypt password hashing, and role-based route protection.
+- Browser authentication uses an HttpOnly session cookie with CSRF protection; API error responses use a consistent safe JSON shape.
 - Initial Flyway schema and JPA model for users, restaurants, categories, menu items, orders, and immutable order-item price/name snapshots.
 
 See [plan.md](plan.md) for the incremental build sequence and [AGENTS.md](AGENTS.md) for repository implementation standards.
 See [docs/data-model.md](docs/data-model.md) for the schema diagram and modeling decisions.
+See [docs/authentication.md](docs/authentication.md) for the auth endpoints, cookie/CSRF behavior, and browser request flow.
