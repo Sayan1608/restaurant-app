@@ -71,4 +71,16 @@ public class MenuCategory {
     public boolean isActive() {
         return active;
     }
+
+    public void update(String name, int displayOrder) {
+        this.name = Objects.requireNonNull(name, "name is required").trim();
+        if (displayOrder < 0) {
+            throw new IllegalArgumentException("display order cannot be negative");
+        }
+        this.displayOrder = displayOrder;
+    }
+
+    public void setActive(boolean active) {
+        this.active = active;
+    }
 }

@@ -120,4 +120,16 @@ public class MenuItem {
     public Instant getUpdatedAt() {
         return updatedAt;
     }
+
+    public void update(MenuCategory category, String name, String description, BigDecimal price, String imageUrl) {
+        this.category = Objects.requireNonNull(category, "category is required");
+        this.name = Objects.requireNonNull(name, "name is required").trim();
+        this.description = description;
+        this.price = requirePositivePrice(price);
+        this.imageUrl = imageUrl;
+    }
+
+    public void setAvailable(boolean available) {
+        this.available = available;
+    }
 }

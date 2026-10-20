@@ -64,9 +64,11 @@ Use a strong unique password outside local development. The OpenRouter key is re
 - Next.js App Router scaffold with TypeScript, Tailwind CSS, and npm.
 - PostgreSQL Compose service with a named data volume and health check.
 - Customer registration, login, logout, current-user endpoint, server-side BCrypt password hashing, and role-based route protection.
+- Public active restaurant and menu browsing, plus admin-only category and menu-item management APIs.
 - Browser authentication uses an HttpOnly session cookie with CSRF protection; API error responses use a consistent safe JSON shape.
 - Initial Flyway schema and JPA model for users, restaurants, categories, menu items, orders, and immutable order-item price/name snapshots.
 
 See [plan.md](plan.md) for the incremental build sequence and [AGENTS.md](AGENTS.md) for repository implementation standards.
 See [docs/data-model.md](docs/data-model.md) for the schema diagram and modeling decisions.
 See [docs/authentication.md](docs/authentication.md) for the auth endpoints, cookie/CSRF behavior, and browser request flow.
+See [docs/restaurant-menu-api.md](docs/restaurant-menu-api.md) for restaurant browsing and admin menu management endpoints.
