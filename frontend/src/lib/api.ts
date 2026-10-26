@@ -27,6 +27,26 @@ export type MenuCategory = {
 export type Menu = { restaurantId: string; restaurantName: string; categories: MenuCategory[] };
 export type CurrentUser = { id: string; name: string; email: string; role: "CUSTOMER" | "ADMIN"; createdAt: string };
 export type ApiError = { code: string; message: string; fieldErrors?: Record<string, string> };
+export type CheckoutLine = { menuItemId: string; quantity: number };
+export type CheckoutRequest = {
+  restaurantId: string;
+  items: CheckoutLine[];
+  contactName: string;
+  contactPhone: string;
+  deliveryAddress: string;
+  deliveryNotes: string;
+};
+export type OrderResponse = {
+  id: string;
+  restaurantId: string;
+  status: "PLACED" | "CONFIRMED" | "PREPARING" | "READY" | "COMPLETED" | "CANCELLED";
+  items: { menuItemId: string | null; itemName: string; unitPrice: number; quantity: number; lineTotal: number }[];
+  subtotal: number;
+  deliveryFee: number;
+  tax: number;
+  total: number;
+  createdAt: string;
+};
 
 const baseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080").replace(/\/$/, "");
 
@@ -72,6 +92,18 @@ export const api = {
       method: "POST",
       headers: { "Content-Type": "application/json", [csrf.headerName]: csrf.token },
       body: JSON.stringify({ restaurantId, message }),
+    });
+  },
+  async createOrder(idempotencyKey: string, payload: CheckoutRequest) {
+    const csrf = await this.csrf();
+    return request<OrderResponse>("/api/orders", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        [csrf.headerName]: csrf.token,
+        "Idempotency-Key": idempotencyKey,
+      },
+      body: JSON.stringify(payload),
     });
   },
 };

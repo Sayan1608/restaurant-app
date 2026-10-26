@@ -113,6 +113,7 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.POST, "/api/chat/messages").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/orders", "/api/orders/**").hasRole("CUSTOMER")
                         .requestMatchers("/api/customer/**").hasRole("CUSTOMER")
                         .requestMatchers("/api/auth/me", "/api/auth/logout").authenticated()
                         .anyRequest().denyAll())

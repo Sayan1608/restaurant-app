@@ -62,6 +62,12 @@ public class CustomerOrder {
     @Column(name = "delivery_notes", length = 500)
     private String deliveryNotes;
 
+    @Column(name = "idempotency_key")
+    private UUID idempotencyKey;
+
+    @Column(name = "request_fingerprint", length = 64)
+    private String requestFingerprint;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -73,7 +79,8 @@ public class CustomerOrder {
 
     public CustomerOrder(UserAccount customer, Restaurant restaurant, OrderStatus status,
             BigDecimal subtotal, BigDecimal deliveryFee, BigDecimal tax, BigDecimal total,
-            String contactName, String contactPhone, String deliveryAddress, String deliveryNotes) {
+            String contactName, String contactPhone, String deliveryAddress, String deliveryNotes,
+            UUID idempotencyKey, String requestFingerprint) {
         this.customer = Objects.requireNonNull(customer, "customer is required");
         this.restaurant = Objects.requireNonNull(restaurant, "restaurant is required");
         this.status = Objects.requireNonNull(status, "status is required");
@@ -89,6 +96,8 @@ public class CustomerOrder {
         this.contactPhone = Objects.requireNonNull(contactPhone, "contact phone is required").trim();
         this.deliveryAddress = Objects.requireNonNull(deliveryAddress, "delivery address is required").trim();
         this.deliveryNotes = deliveryNotes;
+        this.idempotencyKey = Objects.requireNonNull(idempotencyKey, "idempotency key is required");
+        this.requestFingerprint = Objects.requireNonNull(requestFingerprint, "request fingerprint is required");
     }
 
     @PrePersist
@@ -156,6 +165,14 @@ public class CustomerOrder {
 
     public String getDeliveryNotes() {
         return deliveryNotes;
+    }
+
+    public UUID getIdempotencyKey() {
+        return idempotencyKey;
+    }
+
+    public String getRequestFingerprint() {
+        return requestFingerprint;
     }
 
     public Instant getCreatedAt() {
