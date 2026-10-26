@@ -1,6 +1,6 @@
 # Restaurant Food Ordering MVP
 
-A single-restaurant food ordering MVP built as a Spring Boot API, a Next.js web app, and PostgreSQL. The AI menu and ordering FAQ assistant is planned for a later slice; its server-only environment variables are listed for local setup, but chat is not implemented yet.
+A single-restaurant food ordering MVP built as a Spring Boot API, a Next.js web app, and PostgreSQL. The current customer slice includes live menu browsing, a persistent client-side cart, session-based customer registration/login, and a server-side AI menu and ordering FAQ assistant.
 
 ## Requirements
 
@@ -54,7 +54,8 @@ The initial Flyway migration creates the schema without inserting application da
 | `NEXT_PUBLIC_API_BASE_URL` | Browser-visible backend base URL |
 | `APP_CORS_ALLOWED_ORIGIN` | The single permitted browser origin for credentialed API requests (defaults to `http://localhost:3000`) |
 | `APP_SESSION_COOKIE_SECURE` | Set to `true` behind HTTPS; keep `false` for local HTTP |
-| `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` | Reserved for the planned server-side chatbot integration; never expose the key through `NEXT_PUBLIC_*` or frontend code |
+| `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` | Server-side assistant provider credentials/model; never expose the key through `NEXT_PUBLIC_*` or frontend code |
+| `OPENROUTER_BASE_URL` | Optional server-side OpenRouter-compatible API base URL; defaults to `https://openrouter.ai/api/v1` |
 
 Use a strong unique password outside local development. The OpenRouter key is read only by the backend and is never sent to the browser.
 
@@ -67,8 +68,14 @@ Use a strong unique password outside local development. The OpenRouter key is re
 - Public active restaurant and menu browsing, plus admin-only category and menu-item management APIs.
 - Browser authentication uses an HttpOnly session cookie with CSRF protection; API error responses use a consistent safe JSON shape.
 - Initial Flyway schema and JPA model for users, restaurants, categories, menu items, orders, and immutable order-item price/name snapshots.
+- Responsive customer storefront with live menu loading, category/item cards, cart quantity controls, local cart persistence, and accessible loading/empty/error states.
+- Customer registration and login through the existing HttpOnly session and CSRF flow.
+- Public `/api/chat/messages` FAQ endpoint grounded in the selected restaurant's current public menu, with input/output bounds, provider timeout, per-client request limiting, and a safe unavailable response.
+
+The cart subtotal is a convenience estimate. Checkout is not implemented yet; the backend will revalidate menu availability and calculate totals in the planned checkout slice. The assistant can answer menu and general ordering FAQ questions only; it cannot access customer/order data or place and change orders. Set `OPENROUTER_API_KEY` in the backend environment to enable it.
 
 See [plan.md](plan.md) for the incremental build sequence and [AGENTS.md](AGENTS.md) for repository implementation standards.
 See [docs/data-model.md](docs/data-model.md) for the schema diagram and modeling decisions.
 See [docs/authentication.md](docs/authentication.md) for the auth endpoints, cookie/CSRF behavior, and browser request flow.
 See [docs/restaurant-menu-api.md](docs/restaurant-menu-api.md) for restaurant browsing and admin menu management endpoints.
+See [docs/chat-api.md](docs/chat-api.md) for the FAQ assistant contract and limits.

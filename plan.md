@@ -364,6 +364,12 @@ Only prioritise these after the core flow is stable and users have validated the
 9. Metrics, distributed tracing, alerting, and load testing.
 10. Read replicas, partitioning, autoscaling, and orchestration if measured traffic requires them.
 
-## 9. First Session — Start Here
+## 9. Current implementation status
 
-Do not implement all ten steps at once. Start with Step 1 and its acceptance criteria; do not duplicate the checklist here. Build one runnable slice at a time, and add focused tests in the same step as each feature.
+Reviewed against the repository on 2026-10-26. Steps 1–4 are implemented: local backend/frontend/database setup, initial schema and entities, session authentication, public restaurant/menu APIs, and admin menu operations.
+
+Step 5 is now implemented: responsive customer menu browsing, add/remove/quantity cart controls with a client-side subtotal, registration/login, and a menu-grounded FAQ assistant routed through the backend. Checkout is intentionally the next slice; the cart communicates that its subtotal is an estimate and currently has no active checkout action.
+
+**Next: Step 6 — Implement checkout and transactional order creation.** Validate customer identity, request line items and delivery/contact requirements; re-read current menu availability and prices; calculate totals on the server; persist order snapshots atomically; and test invalid, unavailable, and price-tampering cases.
+
+Continue to deliver one runnable slice at a time and add focused tests alongside each feature. Steps 7–10 remain future work in the sequence above.
