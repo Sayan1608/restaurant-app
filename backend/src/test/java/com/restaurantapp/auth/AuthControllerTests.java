@@ -153,7 +153,8 @@ class AuthControllerTests {
     @Test
     void adminRolePassesAdminAuthorizationCheck() throws Exception {
         mockMvc.perform(get("/api/admin/orders").with(user("admin").roles("ADMIN")))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(0));
     }
 
     @Test

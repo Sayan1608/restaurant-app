@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, type CurrentUser, type Menu, type MenuItem, type OrderResponse, type Restaurant } from "@/lib/api";
 import CheckoutForm from "./checkout-form";
+import OrderCenter from "./order-center";
 
 type CartLine = { item: MenuItem; quantity: number };
 type ChatLine = { from: "assistant" | "you"; text: string };
@@ -20,6 +21,7 @@ export default function Storefront() {
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [completedOrder, setCompletedOrder] = useState<OrderResponse | null>(null);
+  const [ordersOpen, setOrdersOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
@@ -107,7 +109,7 @@ export default function Storefront() {
       <a className="brand" href="#top" aria-label="Goodfolk home"><span className="brand-mark">g.</span><span>goodfolk<span className="brand-dot">.</span></span></a>
       <nav className="main-nav" aria-label="Main navigation"><a href="#menu">Menu</a><a href="#story">Our kitchen</a><a href="#faq">FAQ</a></nav>
       <div className="header-actions">
-        {user ? <><span className="welcome">Hi, {user.name.split(" ")[0]}</span><button className="text-button" onClick={signOut}>Sign out</button></> : <button className="text-button" onClick={() => { setAuthMode("login"); setAuthOpen(true); }}>Sign in</button>}
+        {user ? <><span className="welcome">Hi, {user.name.split(" ")[0]}</span><button className="text-button" onClick={() => setOrdersOpen(true)}>{user.role === "ADMIN" ? "Manage orders" : "My orders"}</button><button className="text-button" onClick={signOut}>Sign out</button></> : <button className="text-button" onClick={() => { setAuthMode("login"); setAuthOpen(true); }}>Sign in</button>}
         <button className="cart-button" onClick={() => setCartOpen(true)} aria-label={`Open bag, ${itemCount} items`}><span>Bag</span><span className="bag-count">{itemCount}</span></button>
       </div>
     </header>
@@ -133,6 +135,8 @@ export default function Storefront() {
 
     <section className="closing-band" id="faq"><span>✳</span><p>Something on your mind?</p><button onClick={() => setChatOpen(true)}>Ask our little helper <span>↗</span></button></section>
     <footer className="footer"><a className="brand" href="#top"><span className="brand-mark">g.</span><span>goodfolk<span className="brand-dot">.</span></span></a><span>Good food. Good people. Good days.</span><span>Made with care <b>✳</b></span></footer>
+
+    {ordersOpen && user && <OrderCenter isAdmin={user.role === "ADMIN"} onClose={() => setOrdersOpen(false)} loadMyOrders={api.myOrders} loadAdminOrders={api.adminOrders} loadOrder={api.getOrder} updateOrderStatus={api.updateOrderStatus} />}
 
     {cartOpen && <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setCartOpen(false); }}><aside className="drawer" aria-label="Your bag"><div className="drawer-head"><div><p className="eyebrow">YOUR LITTLE BAG</p><h2>{completedOrder ? "Order placed." : "Good choices."}</h2></div><button className="close-button" onClick={() => { setCartOpen(false); setCompletedOrder(null); setCheckoutOpen(false); }} aria-label="Close bag">?</button></div>{completedOrder ? <section className="order-confirmation" aria-label="Order confirmation"><span className="confirmation-mark">?</span><h3>Thanks, your order is in.</h3><p>Order <strong>#{completedOrder.id}</strong> is <strong>{completedOrder.status.toLowerCase()}</strong>.</p><div><span>Order total</span><strong>{money(completedOrder.total)}</strong></div><button className="button button-dark" onClick={() => { setCartOpen(false); setCompletedOrder(null); }}>Lovely, thanks</button></section> : checkoutOpen && user ? <CheckoutForm restaurantId={restaurant?.id ?? ""} customerName={user.name} lines={cart.map(({ item, quantity }) => ({ menuItemId: item.id, name: item.name, quantity, unitPrice: item.price }))} placeOrder={api.createOrder} onBack={() => setCheckoutOpen(false)} onComplete={(order) => { setCompletedOrder(order); setCart([]); setCheckoutOpen(false); }} /> : cart.length ? <><div className="cart-lines">{cart.map(({ item, quantity }) => <div className="cart-line" key={item.id}><div><h3>{item.name}</h3><span>{money(item.price)} each</span></div><div className="quantity-control"><button onClick={() => changeQuantity(item.id, -1)} aria-label={`Remove one ${item.name}`}>?</button><span>{quantity}</span><button onClick={() => changeQuantity(item.id, 1)} aria-label={`Add one ${item.name}`}>+</button></div></div>)}</div><div className="cart-summary"><div><span>Subtotal estimate</span><strong>{money(subtotal)}</strong></div><p>Final prices and availability are confirmed by the kitchen at checkout. Tax and delivery fee are ?0 for now.</p><button className="button button-dark checkout-button" onClick={startCheckout}>{user ? "Continue to checkout" : "Sign in to checkout"} <span>?</span></button></div></> : <div className="empty-cart"><span>?</span><p>Your bag is waiting for something lovely.</p><button className="button button-dark" onClick={() => { setCartOpen(false); document.getElementById("menu")?.scrollIntoView({ behavior: "smooth" }); }}>Explore the menu</button></div>}</aside></div>}
 

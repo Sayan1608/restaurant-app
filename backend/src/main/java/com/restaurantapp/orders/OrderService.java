@@ -8,6 +8,11 @@ import com.restaurantapp.restaurant.Restaurant;
 import com.restaurantapp.restaurant.RestaurantService;
 import com.restaurantapp.user.UserAccount;
 import com.restaurantapp.user.UserAccountRepository;
+import com.restaurantapp.user.UserRole;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +23,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.HashSet;
 import java.util.List;
@@ -96,6 +102,87 @@ public class OrderService {
                 .toList();
         orderItemRepository.saveAll(orderItems);
         return new OrderCreationResult(OrderResponse.from(order, orderItems), false);
+    }
+
+    @Transactional(readOnly = true)
+    public OrderPageResponse<OrderResponse> myOrders(AuthenticatedUser customer, int page, int size) {
+        Pageable pageable = pageRequest(page, size);
+        Page<CustomerOrder> orders = orderRepository.findAllByCustomer_Id(customer.getId(), pageable);
+        return OrderPageResponse.from(orders, summarize(orders.getContent()));
+    }
+
+    @Transactional(readOnly = true)
+    public OrderDetailResponse getOrder(UUID orderId, AuthenticatedUser requester) {
+        CustomerOrder order = orderRepository.findDetailedById(orderId)
+                .orElseThrow(() -> orderNotFound());
+        if (requester.getRole() == UserRole.CUSTOMER && !order.getCustomer().getId().equals(requester.getId())) {
+            throw orderNotFound();
+        }
+        return OrderDetailResponse.from(order, orderItemRepository.findAllByOrder_IdOrderById(orderId));
+    }
+
+    @Transactional(readOnly = true)
+    public OrderPageResponse<OrderDetailResponse> adminOrders(int page, int size, OrderStatus status) {
+        Pageable pageable = pageRequest(page, size);
+        Page<CustomerOrder> orders = status == null
+                ? orderRepository.findAll(pageable)
+                : orderRepository.findAllByStatus(status, pageable);
+        List<CustomerOrder> content = orders.getContent();
+        Map<UUID, List<OrderItem>> itemsByOrder = itemsByOrder(content);
+        List<OrderDetailResponse> details = content.stream()
+                .map(order -> OrderDetailResponse.from(order, itemsByOrder.getOrDefault(order.getId(), List.of())))
+                .toList();
+        return OrderPageResponse.from(orders, details);
+    }
+
+    @Transactional
+    public OrderDetailResponse updateStatus(UUID orderId, OrderStatus requestedStatus) {
+        CustomerOrder order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> orderNotFound());
+        if (!isAllowedTransition(order.getStatus(), requestedStatus)) {
+            throw new ApiException(HttpStatus.CONFLICT, "INVALID_ORDER_STATUS_TRANSITION",
+                    "The order cannot move from " + order.getStatus() + " to " + requestedStatus + ".");
+        }
+        order.changeStatus(requestedStatus);
+        return OrderDetailResponse.from(order, orderItemRepository.findAllByOrder_IdOrderById(orderId));
+    }
+
+    private List<OrderResponse> summarize(List<CustomerOrder> orders) {
+        Map<UUID, List<OrderItem>> itemsByOrder = itemsByOrder(orders);
+        return orders.stream().map(order -> OrderResponse.from(order,
+                itemsByOrder.getOrDefault(order.getId(), List.of()))).toList();
+    }
+
+    private Map<UUID, List<OrderItem>> itemsByOrder(List<CustomerOrder> orders) {
+        if (orders.isEmpty()) return Map.of();
+        List<UUID> orderIds = orders.stream().map(CustomerOrder::getId).toList();
+        Map<UUID, List<OrderItem>> grouped = new HashMap<>();
+        orderItemRepository.findAllForOrders(orderIds).forEach(item ->
+                grouped.computeIfAbsent(item.getOrder().getId(), ignored -> new ArrayList<>()).add(item));
+        return grouped;
+    }
+
+    private Pageable pageRequest(int page, int size) {
+        if (page < 0 || size < 1 || size > 50) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_PAGE_REQUEST",
+                    "Page must be non-negative and size must be between 1 and 50.");
+        }
+        return PageRequest.of(page, size, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
+    }
+
+    private ApiException orderNotFound() {
+        return new ApiException(HttpStatus.NOT_FOUND, "ORDER_NOT_FOUND", "The order was not found.");
+    }
+
+    private boolean isAllowedTransition(OrderStatus current, OrderStatus requested) {
+        if (requested == null) return false;
+        return switch (current) {
+            case PLACED -> requested == OrderStatus.CONFIRMED || requested == OrderStatus.CANCELLED;
+            case CONFIRMED -> requested == OrderStatus.PREPARING || requested == OrderStatus.CANCELLED;
+            case PREPARING -> requested == OrderStatus.READY;
+            case READY -> requested == OrderStatus.COMPLETED;
+            case COMPLETED, CANCELLED -> false;
+        };
     }
 
     private void rejectDuplicateLines(List<OrderLineRequest> lines) {

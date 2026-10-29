@@ -135,6 +135,10 @@ public class CustomerOrder {
         return status;
     }
 
+    void changeStatus(OrderStatus status) {
+        this.status = Objects.requireNonNull(status, "status is required");
+    }
+
     public BigDecimal getSubtotal() {
         return subtotal;
     }

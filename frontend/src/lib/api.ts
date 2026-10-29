@@ -47,6 +47,24 @@ export type OrderResponse = {
   total: number;
   createdAt: string;
 };
+export type OrderStatus = OrderResponse["status"];
+export type OrderSummary = OrderResponse;
+export type OrderDetail = OrderResponse & {
+  customerId: string;
+  customerName: string;
+  contactName: string;
+  contactPhone: string;
+  deliveryAddress: string;
+  deliveryNotes: string | null;
+  updatedAt: string;
+};
+export type OrderPage<T> = {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+};
 
 const baseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080").replace(/\/$/, "");
 
@@ -104,6 +122,25 @@ export const api = {
         "Idempotency-Key": idempotencyKey,
       },
       body: JSON.stringify(payload),
+    });
+  },
+  myOrders(page = 0, size = 10) {
+    return request<OrderPage<OrderSummary>>(`/api/orders/my?page=${page}&size=${size}`);
+  },
+  getOrder(orderId: string) {
+    return request<OrderDetail>(`/api/orders/${orderId}`);
+  },
+  adminOrders(page = 0, size = 20, status?: OrderStatus) {
+    const query = new URLSearchParams({ page: String(page), size: String(size) });
+    if (status) query.set("status", status);
+    return request<OrderPage<OrderDetail>>(`/api/admin/orders?${query.toString()}`);
+  },
+  async updateOrderStatus(orderId: string, status: OrderStatus) {
+    const csrf = await api.csrf();
+    return request<OrderDetail>(`/api/admin/orders/${orderId}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", [csrf.headerName]: csrf.token },
+      body: JSON.stringify({ status }),
     });
   },
 };

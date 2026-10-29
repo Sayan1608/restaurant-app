@@ -72,8 +72,9 @@ Use a strong unique password outside local development. The OpenRouter key is re
 - Customer registration and login through the existing HttpOnly session and CSRF flow.
 - Public `/api/chat/messages` FAQ endpoint grounded in the selected restaurant's current public menu, with input/output bounds, provider timeout, per-client request limiting, and a safe unavailable response.
 - Customer checkout at `POST /api/orders`: current server-side availability and price validation, transactional order/item snapshots, and customer-scoped idempotent retries. Tax and delivery fees are currently zero.
+- Customer order history and owner/admin order details, plus paginated admin order queue, status filtering, and guarded status updates.
 
-The cart subtotal is a convenience estimate; checkout calculates the final total from current database prices. Payment processing and order history/status management are later project steps. The assistant can answer menu and general ordering FAQ questions only; it cannot access customer/order data or place and change orders. Set `OPENROUTER_API_KEY` in the backend environment to enable it.
+The cart subtotal is a convenience estimate; checkout calculates the final total from current database prices. Payment processing remains a later project step. The assistant can answer menu and general ordering FAQ questions only; it cannot access customer/order data or place and change orders. Set `OPENROUTER_API_KEY` in the backend environment to enable it.
 
 See [plan.md](plan.md) for the incremental build sequence and [AGENTS.md](AGENTS.md) for repository implementation standards.
 See [docs/data-model.md](docs/data-model.md) for the schema diagram and modeling decisions.
@@ -81,3 +82,4 @@ See [docs/authentication.md](docs/authentication.md) for the auth endpoints, coo
 See [docs/restaurant-menu-api.md](docs/restaurant-menu-api.md) for restaurant browsing and admin menu management endpoints.
 See [docs/chat-api.md](docs/chat-api.md) for the FAQ assistant contract and limits.
 See [docs/checkout-api.md](docs/checkout-api.md) for checkout validation, pricing, snapshots, and idempotency.
+See [docs/orders-api.md](docs/orders-api.md) for order history, ownership, pagination, and status transitions.

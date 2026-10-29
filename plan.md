@@ -366,8 +366,10 @@ Only prioritise these after the core flow is stable and users have validated the
 
 ## 9. Current implementation status
 
-Reviewed against the repository on 2026-10-26. Steps 1-5 are implemented: local backend/frontend/database setup, initial schema and entities, session authentication, public restaurant/menu APIs, admin menu operations, and the customer storefront with FAQ assistant.
+Reviewed against the repository on 2026-10-29. Steps 1-5 are implemented: local backend/frontend/database setup, initial schema and entities, session authentication, public restaurant/menu APIs, admin menu operations, and the customer storefront with FAQ assistant.
 
 Step 6 is implemented: authenticated customers can submit checkout details from the cart. The backend re-reads current menu items and prices, rejects unavailable or invalid lines, recalculates totals, and creates orders with immutable item snapshots in a transaction. A customer-scoped UUID idempotency key safely replays an unchanged checkout and rejects reuse with changed details. Tax and delivery fees are both zero for now, per product direction; payment remains deferred to Step 8. Backend integration tests cover price tampering, snapshots, unavailable items, quantity and duplicate-line validation, rollback, idempotency, and access control. Frontend tests cover the checkout payload, retry key, errors, and returning to the cart.
 
-Next: Step 7 - Add customer order history and order-status management. Steps 7-10 remain future work in the sequence above.
+Step 7 is implemented: customers can view paginated order history and owner-only details; admins can view and filter a paginated incoming-order queue, inspect delivery details, and update status through the defined workflow. The storefront includes customer order history/detail and an admin order desk. Cancellation is allowed only from PLACED or CONFIRMED, before preparation starts.
+
+Next: Step 8 - Complete the admin dashboard and choose the MVP payment method. Steps 8-10 remain future work in the sequence above.
