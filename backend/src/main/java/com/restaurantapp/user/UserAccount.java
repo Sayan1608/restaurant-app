@@ -72,6 +72,10 @@ public class UserAccount {
         return passwordHash;
     }
 
+    public void setPasswordHash(String passwordHash) {
+        this.passwordHash = Objects.requireNonNull(passwordHash, "password hash is required");
+    }
+
     public UserRole getRole() {
         return role;
     }

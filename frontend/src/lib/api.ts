@@ -100,6 +100,22 @@ export const api = {
       body: JSON.stringify(payload),
     });
   },
+  async requestPasswordReset(email: string) {
+    const csrf = await this.csrf();
+    return request<{ message: string }>("/api/auth/forgot-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", [csrf.headerName]: csrf.token },
+      body: JSON.stringify({ email }),
+    });
+  },
+  async resetPassword(email: string, otp: string, newPassword: string) {
+    const csrf = await this.csrf();
+    return request<{ message: string }>("/api/auth/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", [csrf.headerName]: csrf.token },
+      body: JSON.stringify({ email, otp, newPassword }),
+    });
+  },
   async logout() {
     const csrf = await this.csrf();
     await request<void>("/api/auth/logout", { method: "POST", headers: { [csrf.headerName]: csrf.token } });

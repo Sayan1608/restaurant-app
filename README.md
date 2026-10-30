@@ -56,6 +56,8 @@ The initial Flyway migration creates the schema without inserting application da
 | `APP_SESSION_COOKIE_SECURE` | Set to `true` behind HTTPS; keep `false` for local HTTP |
 | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` | Server-side assistant provider credentials/model; never expose the key through `NEXT_PUBLIC_*` or frontend code |
 | `OPENROUTER_BASE_URL` | Optional server-side OpenRouter-compatible API base URL; defaults to `https://openrouter.ai/api/v1` |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` | SMTP server settings for email OTP password recovery; keep credentials in the backend environment |
+| `SMTP_AUTH`, `SMTP_STARTTLS`, `SMTP_FROM` | Optional SMTP authentication/TLS switches and sender address |
 
 Use a strong unique password outside local development. The OpenRouter key is read only by the backend and is never sent to the browser.
 
@@ -70,6 +72,7 @@ Use a strong unique password outside local development. The OpenRouter key is re
 - Initial Flyway schema and JPA model for users, restaurants, categories, menu items, orders, and immutable order-item price/name snapshots.
 - Responsive customer storefront with live menu loading, category/item cards, cart quantity controls, local cart persistence, and accessible loading/empty/error states.
 - Customer registration and login through the existing HttpOnly session and CSRF flow.
+- Email OTP password recovery through `POST /api/auth/forgot-password` and `POST /api/auth/reset-password`; SMTP must be configured to deliver codes.
 - Public `/api/chat/messages` FAQ endpoint grounded in the selected restaurant's current public menu, with input/output bounds, provider timeout, per-client request limiting, and a safe unavailable response.
 - Customer checkout at `POST /api/orders`: current server-side availability and price validation, transactional order/item snapshots, and customer-scoped idempotent retries. Tax and delivery fees are currently zero.
 - Customer order history and owner/admin order details, plus paginated admin order queue, status filtering, and guarded status updates.
@@ -79,6 +82,7 @@ The cart subtotal is a convenience estimate; checkout calculates the final total
 See [plan.md](plan.md) for the incremental build sequence and [AGENTS.md](AGENTS.md) for repository implementation standards.
 See [docs/data-model.md](docs/data-model.md) for the schema diagram and modeling decisions.
 See [docs/authentication.md](docs/authentication.md) for the auth endpoints, cookie/CSRF behavior, and browser request flow.
+See [docs/password-recovery.md](docs/password-recovery.md) for email OTP password recovery and SMTP setup.
 See [docs/restaurant-menu-api.md](docs/restaurant-menu-api.md) for restaurant browsing and admin menu management endpoints.
 See [docs/chat-api.md](docs/chat-api.md) for the FAQ assistant contract and limits.
 See [docs/checkout-api.md](docs/checkout-api.md) for checkout validation, pricing, snapshots, and idempotency.

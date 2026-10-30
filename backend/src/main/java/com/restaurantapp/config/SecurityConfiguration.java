@@ -111,7 +111,8 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.GET, "/api/restaurants", "/api/restaurants/*",
                                 "/api/restaurants/*/menu", "/api/menu-items/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/chat/messages").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login",
+                                "/api/auth/forgot-password", "/api/auth/reset-password").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/orders/my").hasRole("CUSTOMER")
                         .requestMatchers(HttpMethod.GET, "/api/orders/*").hasAnyRole("CUSTOMER", "ADMIN")

@@ -24,9 +24,10 @@ export default function Storefront() {
   const [ordersOpen, setOrdersOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
-  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [authMode, setAuthMode] = useState<"login" | "register" | "forgot" | "reset">("login");
   const [authBusy, setAuthBusy] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
+  const [recoveryEmail, setRecoveryEmail] = useState("");
   const [chatInput, setChatInput] = useState("");
   const [chatBusy, setChatBusy] = useState(false);
   const [chatLines, setChatLines] = useState<ChatLine[]>([{ from: "assistant", text: "Hi! Ask me about the menu, ingredients, or what might suit your craving." }]);
@@ -76,12 +77,34 @@ export default function Storefront() {
 
   async function submitAuth(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); setAuthBusy(true); setAuthMessage("");
+    if (authMode !== "login" && authMode !== "register") { setAuthBusy(false); return; }
     const data = new FormData(event.currentTarget);
     const payload = Object.fromEntries([...data.entries()].map(([key, value]) => [key, String(value)]));
     try {
       const signedIn = await api.authenticate(authMode, payload);
       setUser(signedIn); setAuthOpen(false);
     } catch (reason) { setAuthMessage(reason instanceof Error ? reason.message : "Could not sign you in."); }
+    finally { setAuthBusy(false); }
+  }
+
+  async function requestPasswordReset(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setAuthBusy(true); setAuthMessage("");
+    const data = new FormData(event.currentTarget);
+    const email = String(data.get("email") ?? "").trim();
+    try {
+      const result = await api.requestPasswordReset(email);
+      setRecoveryEmail(email); setAuthMessage(result.message); setAuthMode("reset");
+    } catch (reason) { setAuthMessage(reason instanceof Error ? reason.message : "Could not request a reset code."); }
+    finally { setAuthBusy(false); }
+  }
+
+  async function confirmPasswordReset(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setAuthBusy(true); setAuthMessage("");
+    const data = new FormData(event.currentTarget);
+    try {
+      const result = await api.resetPassword(recoveryEmail, String(data.get("otp") ?? ""), String(data.get("newPassword") ?? ""));
+      setAuthMode("login"); setAuthMessage(result.message);
+    } catch (reason) { setAuthMessage(reason instanceof Error ? reason.message : "Could not reset your password."); }
     finally { setAuthBusy(false); }
   }
 
@@ -140,7 +163,7 @@ export default function Storefront() {
 
     {cartOpen && <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setCartOpen(false); }}><aside className="drawer" aria-label="Your bag"><div className="drawer-head"><div><p className="eyebrow">YOUR LITTLE BAG</p><h2>{completedOrder ? "Order placed." : "Good choices."}</h2></div><button className="close-button" onClick={() => { setCartOpen(false); setCompletedOrder(null); setCheckoutOpen(false); }} aria-label="Close bag">?</button></div>{completedOrder ? <section className="order-confirmation" aria-label="Order confirmation"><span className="confirmation-mark">?</span><h3>Thanks, your order is in.</h3><p>Order <strong>#{completedOrder.id}</strong> is <strong>{completedOrder.status.toLowerCase()}</strong>.</p><div><span>Order total</span><strong>{money(completedOrder.total)}</strong></div><button className="button button-dark" onClick={() => { setCartOpen(false); setCompletedOrder(null); }}>Lovely, thanks</button></section> : checkoutOpen && user ? <CheckoutForm restaurantId={restaurant?.id ?? ""} customerName={user.name} lines={cart.map(({ item, quantity }) => ({ menuItemId: item.id, name: item.name, quantity, unitPrice: item.price }))} placeOrder={api.createOrder} onBack={() => setCheckoutOpen(false)} onComplete={(order) => { setCompletedOrder(order); setCart([]); setCheckoutOpen(false); }} /> : cart.length ? <><div className="cart-lines">{cart.map(({ item, quantity }) => <div className="cart-line" key={item.id}><div><h3>{item.name}</h3><span>{money(item.price)} each</span></div><div className="quantity-control"><button onClick={() => changeQuantity(item.id, -1)} aria-label={`Remove one ${item.name}`}>?</button><span>{quantity}</span><button onClick={() => changeQuantity(item.id, 1)} aria-label={`Add one ${item.name}`}>+</button></div></div>)}</div><div className="cart-summary"><div><span>Subtotal estimate</span><strong>{money(subtotal)}</strong></div><p>Final prices and availability are confirmed by the kitchen at checkout. Tax and delivery fee are ?0 for now.</p><button className="button button-dark checkout-button" onClick={startCheckout}>{user ? "Continue to checkout" : "Sign in to checkout"} <span>?</span></button></div></> : <div className="empty-cart"><span>?</span><p>Your bag is waiting for something lovely.</p><button className="button button-dark" onClick={() => { setCartOpen(false); document.getElementById("menu")?.scrollIntoView({ behavior: "smooth" }); }}>Explore the menu</button></div>}</aside></div>}
 
-    {authOpen && <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setAuthOpen(false); }}><section className="auth-modal" aria-label={authMode === "login" ? "Sign in" : "Create account"}><button className="close-button" onClick={() => setAuthOpen(false)} aria-label="Close">×</button><p className="eyebrow">GOOD TO HAVE YOU</p><h2>{authMode === "login" ? "Welcome back." : "Come on in."}</h2><form onSubmit={submitAuth} className="auth-form">{authMode === "register" && <label>Your name<input name="name" autoComplete="name" required maxLength={120}/></label>}<label>Email address<input name="email" type="email" autoComplete="email" required maxLength={320}/></label><label>Password<input name="password" type="password" autoComplete={authMode === "login" ? "current-password" : "new-password"} required minLength={authMode === "register" ? 12 : undefined} maxLength={72}/></label>{authMessage && <p className="form-error" role="alert">{authMessage}</p>}<button className="button button-dark" disabled={authBusy}>{authBusy ? "One moment…" : authMode === "login" ? "Sign in" : "Create account"}</button></form><p className="auth-switch">{authMode === "login" ? "New around here?" : "Already one of us?"} <button onClick={() => { setAuthMode(authMode === "login" ? "register" : "login"); setAuthMessage(""); }}>{authMode === "login" ? "Create an account" : "Sign in"}</button></p></section></div>}
+    {authOpen && <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setAuthOpen(false); }}><section className="auth-modal" aria-label="Account access"><button className="close-button" onClick={() => setAuthOpen(false)} aria-label="Close">×</button><p className="eyebrow">GOOD TO HAVE YOU</p><h2>{authMode === "login" ? "Welcome back." : authMode === "register" ? "Come on in." : authMode === "forgot" ? "Reset your password." : "Enter your code."}</h2>{authMode === "forgot" ? <form onSubmit={requestPasswordReset} className="auth-form"><label>Email address<input name="email" type="email" autoComplete="email" required maxLength={320}/></label>{authMessage && <p className="form-error" role="status">{authMessage}</p>}<button className="button button-dark" disabled={authBusy}>{authBusy ? "Sending…" : "Send verification code"}</button></form> : authMode === "reset" ? <form onSubmit={confirmPasswordReset} className="auth-form"><p>Enter the six digit code sent to {recoveryEmail} and choose a new password.</p><label>Verification code<input name="otp" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" minLength={6} maxLength={6} required/></label><label>New password<input name="newPassword" type="password" autoComplete="new-password" minLength={12} maxLength={72} required/></label>{authMessage && <p className="form-error" role="alert">{authMessage}</p>}<button className="button button-dark" disabled={authBusy}>{authBusy ? "Resetting…" : "Reset password"}</button></form> : <><form onSubmit={submitAuth} className="auth-form">{authMode === "register" && <label>Your name<input name="name" autoComplete="name" required maxLength={120}/></label>}<label>Email address<input name="email" type="email" autoComplete="email" required maxLength={320}/></label><label>Password<input name="password" type="password" autoComplete={authMode === "login" ? "current-password" : "new-password"} required minLength={authMode === "register" ? 12 : undefined} maxLength={72}/></label>{authMessage && <p className={authMessage.startsWith("Your password has") ? "form-success" : "form-error"} role="status">{authMessage}</p>}<button className="button button-dark" disabled={authBusy}>{authBusy ? "One moment…" : authMode === "login" ? "Sign in" : "Create account"}</button></form>{authMode === "login" && <p className="auth-switch"><button onClick={() => { setAuthMode("forgot"); setAuthMessage(""); }}>Forgot password?</button></p>}<p className="auth-switch">{authMode === "login" ? "New around here?" : "Already one of us?"} <button onClick={() => { setAuthMode(authMode === "login" ? "register" : "login"); setAuthMessage(""); }}>{authMode === "login" ? "Create an account" : "Sign in"}</button></p></>}</section></div>}
 
     {chatOpen && <div className="chat-panel"><div className="chat-head"><div><span className="chat-icon">✳</span><div><strong>Ask goodfolk</strong><small>Menu &amp; ordering helper · AI</small></div></div><button onClick={() => setChatOpen(false)} aria-label="Close assistant">×</button></div><div className="chat-messages" aria-live="polite">{chatLines.map((line, index) => <p className={`chat-bubble ${line.from}`} key={`${index}-${line.from}`}>{line.text}</p>)}{chatBusy && <p className="chat-bubble assistant">Let me have a little look…</p>}</div><form className="chat-form" onSubmit={sendChat}><label className="sr-only" htmlFor="chat-prompt">Ask a menu question</label><input id="chat-prompt" value={chatInput} onChange={(event) => setChatInput(event.target.value)} maxLength={1000} placeholder="Ask us anything…"/><button disabled={chatBusy || !chatInput.trim()} aria-label="Send question">↑</button></form><p className="chat-note">I can help with the public menu and ordering FAQs. I can’t place or change an order.</p></div>}
   </main>;

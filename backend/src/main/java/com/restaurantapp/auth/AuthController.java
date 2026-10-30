@@ -32,15 +32,18 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 public class AuthController {
 
     private final UserAccountService userAccountService;
+    private final PasswordResetService passwordResetService;
     private final AuthenticationManager authenticationManager;
     private final SecurityContextRepository securityContextRepository;
     private final SessionAuthenticationStrategy sessionAuthenticationStrategy;
     private final LogoutHandler logoutHandler;
 
-    public AuthController(UserAccountService userAccountService, AuthenticationManager authenticationManager,
+    public AuthController(UserAccountService userAccountService, PasswordResetService passwordResetService,
+            AuthenticationManager authenticationManager,
             SecurityContextRepository securityContextRepository,
             SessionAuthenticationStrategy sessionAuthenticationStrategy, LogoutHandler logoutHandler) {
         this.userAccountService = userAccountService;
+        this.passwordResetService = passwordResetService;
         this.authenticationManager = authenticationManager;
         this.securityContextRepository = securityContextRepository;
         this.sessionAuthenticationStrategy = sessionAuthenticationStrategy;
@@ -56,6 +59,16 @@ public class AuthController {
     public ResponseEntity<UserResponse> register(@Valid @RequestBody RegisterRequest request) {
         UserResponse response = UserResponse.from(userAccountService.register(request));
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PostMapping("/forgot-password")
+    public PasswordResetResponse forgotPassword(@Valid @RequestBody PasswordResetRequest request) {
+        return passwordResetService.requestReset(request.email());
+    }
+
+    @PostMapping("/reset-password")
+    public PasswordResetResponse resetPassword(@Valid @RequestBody PasswordResetConfirmation request) {
+        return passwordResetService.resetPassword(request.email(), request.otp(), request.newPassword());
     }
 
     @PostMapping("/login")

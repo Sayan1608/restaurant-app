@@ -364,6 +364,26 @@ Only prioritise these after the core flow is stable and users have validated the
 9. Metrics, distributed tracing, alerting, and load testing.
 10. Read replicas, partitioning, autoscaling, and orchestration if measured traffic requires them.
 
+## 8.1 Ad hoc feature — Email OTP password recovery
+
+Requested after Step 7 as an additional authentication feature.
+
+**Tasks**
+1. Add a generic `POST /api/auth/forgot-password` endpoint that sends a six-digit OTP to the account email without revealing whether the account exists.
+2. Persist only a BCrypt hash of the OTP, expire it after 10 minutes, limit guesses to five, and apply a 60-second resend cooldown.
+3. Add `POST /api/auth/reset-password` to validate the OTP and replace the password with a BCrypt hash; invalidate the OTP after use.
+4. Send mail through configurable SMTP settings and keep credentials in environment configuration.
+5. Add sign-in UI for requesting a code and setting a replacement password.
+6. Add unit and controller tests for generic responses, OTP validation, expiry, attempt limits, one-time use, password hashing, and delivery behavior.
+
+**Acceptance criteria**
+- Existing and unknown emails receive the same public response.
+- A valid email OTP can reset a password once; expired, malformed, reused, or repeatedly guessed codes are rejected.
+- OTPs and passwords are never stored in plaintext.
+- SMTP is configured outside source control before email delivery is enabled in a deployment.
+
+**Status:** Implemented. Email is supported because accounts currently have email identities; SMS recovery remains out of scope until phone numbers and an SMS provider are added.
+
 ## 9. Current implementation status
 
 Reviewed against the repository on 2026-10-29. Steps 1-5 are implemented: local backend/frontend/database setup, initial schema and entities, session authentication, public restaurant/menu APIs, admin menu operations, and the customer storefront with FAQ assistant.
@@ -371,5 +391,7 @@ Reviewed against the repository on 2026-10-29. Steps 1-5 are implemented: local 
 Step 6 is implemented: authenticated customers can submit checkout details from the cart. The backend re-reads current menu items and prices, rejects unavailable or invalid lines, recalculates totals, and creates orders with immutable item snapshots in a transaction. A customer-scoped UUID idempotency key safely replays an unchanged checkout and rejects reuse with changed details. Tax and delivery fees are both zero for now, per product direction; payment remains deferred to Step 8. Backend integration tests cover price tampering, snapshots, unavailable items, quantity and duplicate-line validation, rollback, idempotency, and access control. Frontend tests cover the checkout payload, retry key, errors, and returning to the cart.
 
 Step 7 is implemented: customers can view paginated order history and owner-only details; admins can view and filter a paginated incoming-order queue, inspect delivery details, and update status through the defined workflow. The storefront includes customer order history/detail and an admin order desk. Cancellation is allowed only from PLACED or CONFIRMED, before preparation starts.
+
+Ad hoc email OTP password recovery is implemented alongside authentication: users can request a code and set a new password from the sign-in modal. OTPs are BCrypt hashed, expire after 10 minutes, allow five failed attempts, and have a 60-second resend cooldown. The public request message is generic to reduce account enumeration. SMTP settings are environment-configured; mobile/SMS recovery is deferred because accounts do not have phone numbers.
 
 Next: Step 8 - Complete the admin dashboard and choose the MVP payment method. Steps 8-10 remain future work in the sequence above.

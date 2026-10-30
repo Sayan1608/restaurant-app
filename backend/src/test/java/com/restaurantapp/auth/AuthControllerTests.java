@@ -9,12 +9,18 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.mock.web.MockHttpSession;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.mockito.ArgumentCaptor;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import java.util.UUID;
 import java.util.Map;
@@ -45,6 +51,9 @@ class AuthControllerTests {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @MockitoBean
+    private JavaMailSender mailSender;
 
     @Test
     void registrationCreatesCustomerWithHashedPasswordAndIgnoresSuppliedRole() throws Exception {
@@ -141,6 +150,66 @@ class AuthControllerTests {
                                 "Customer", "csrf-" + UUID.randomUUID() + "@example.test", "correct horse battery"))))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    void forgotPasswordResponseDoesNotRevealWhetherEmailExists() throws Exception {
+        mockMvc.perform(post("/api/auth/forgot-password")
+                        .with(csrf().asHeader())
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(new PasswordResetRequest("absent@example.test"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value(
+                        "If an account exists for that email, a verification code has been sent."));
+    }
+
+    @Test
+    void resetPasswordRejectsMalformedOtp() throws Exception {
+        mockMvc.perform(post("/api/auth/reset-password")
+                        .with(csrf().asHeader())
+                        .contentType("application/json")
+                        .content("{\"email\":\"customer@example.test\",\"otp\":\"123\",\"newPassword\":\"correct horse battery\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    void emailOtpCanBeUsedOnceToResetStoredPassword() throws Exception {
+        String email = "reset-" + UUID.randomUUID() + "@example.test";
+        userAccountRepository.saveAndFlush(new UserAccount(
+                "Reset Customer", email, passwordEncoder.encode("old password here"), UserRole.CUSTOMER));
+
+        mockMvc.perform(post("/api/auth/forgot-password")
+                        .with(csrf().asHeader())
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(new PasswordResetRequest(email))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value(
+                        "If an account exists for that email, a verification code has been sent."));
+
+        ArgumentCaptor<SimpleMailMessage> messageCaptor = ArgumentCaptor.forClass(SimpleMailMessage.class);
+        org.mockito.Mockito.verify(mailSender).send(messageCaptor.capture());
+        Matcher matcher = Pattern.compile("code is (\\d{6})").matcher(messageCaptor.getValue().getText());
+        org.junit.jupiter.api.Assertions.assertTrue(matcher.find());
+        String otp = matcher.group(1);
+
+        mockMvc.perform(post("/api/auth/reset-password")
+                        .with(csrf().asHeader())
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(
+                                new PasswordResetConfirmation(email, otp, "new secure password"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Your password has been reset. You can now sign in."));
+
+        UserAccount updated = userAccountRepository.findByEmail(email).orElseThrow();
+        org.junit.jupiter.api.Assertions.assertTrue(passwordEncoder.matches("new secure password", updated.getPasswordHash()));
+        mockMvc.perform(post("/api/auth/reset-password")
+                        .with(csrf().asHeader())
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(
+                                new PasswordResetConfirmation(email, otp, "another secure password"))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("PASSWORD_RESET_INVALID"));
     }
 
     @Test
