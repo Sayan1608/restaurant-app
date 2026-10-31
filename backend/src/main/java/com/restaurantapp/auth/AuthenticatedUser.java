@@ -8,6 +8,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.time.Instant;
 import java.io.Serializable;
@@ -89,5 +90,17 @@ public final class AuthenticatedUser implements UserDetails, Serializable {
     @Override
     public boolean isEnabled() {
         return true;
+    }
+
+    // SessionRegistry keys its sessions by principal, so two loads of the same account must be equal.
+    @Override
+    public boolean equals(Object other) {
+        return this == other
+                || (other instanceof AuthenticatedUser user && Objects.equals(id, user.id));
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(id);
     }
 }

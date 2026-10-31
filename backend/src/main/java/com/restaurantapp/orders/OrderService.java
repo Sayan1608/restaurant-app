@@ -9,6 +9,9 @@ import com.restaurantapp.restaurant.RestaurantService;
 import com.restaurantapp.user.UserAccount;
 import com.restaurantapp.user.UserAccountRepository;
 import com.restaurantapp.user.UserRole;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -16,6 +19,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -34,6 +38,7 @@ import java.util.stream.Collectors;
 
 @Service
 public class OrderService {
+    private static final Logger log = LoggerFactory.getLogger(OrderService.class);
     private static final BigDecimal ZERO_MONEY = new BigDecimal("0.00");
 
     private final UserAccountRepository userAccountRepository;
@@ -41,19 +46,60 @@ public class OrderService {
     private final MenuItemRepository menuItemRepository;
     private final CustomerOrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
+    private final TransactionTemplate transactionTemplate;
 
     public OrderService(UserAccountRepository userAccountRepository, RestaurantService restaurantService,
             MenuItemRepository menuItemRepository, CustomerOrderRepository orderRepository,
-            OrderItemRepository orderItemRepository) {
+            OrderItemRepository orderItemRepository, TransactionTemplate transactionTemplate) {
         this.userAccountRepository = userAccountRepository;
         this.restaurantService = restaurantService;
         this.menuItemRepository = menuItemRepository;
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
+        this.transactionTemplate = transactionTemplate;
     }
 
-    @Transactional
+    /**
+     * Places an order, or replays the existing one when the same idempotency key is reused.
+     *
+     * <p>The key is also guarded by a unique index, so two concurrent requests can both pass the
+     * lookup below and one of them loses the insert. That loser is recovered here rather than
+     * surfacing as a 500, which would break the guarantee the idempotency key exists to provide.
+     */
     public OrderCreationResult create(AuthenticatedUser authenticatedUser, UUID idempotencyKey,
+            CreateOrderRequest request) {
+        try {
+            return transactionTemplate.execute(status ->
+                    placeOrder(authenticatedUser, idempotencyKey, request));
+        } catch (DataIntegrityViolationException exception) {
+            log.info("Concurrent checkout lost the idempotency-key race; replaying the committed order.");
+            return transactionTemplate.execute(status ->
+                    replayConcurrentOrder(authenticatedUser.getId(), idempotencyKey, fingerprint(request), exception));
+        }
+    }
+
+    /**
+     * Re-reads the order committed by the request that won the race. The transaction that hit the
+     * constraint is already rolled back, so this runs in a fresh one.
+     */
+    private OrderCreationResult replayConcurrentOrder(UUID customerId, UUID idempotencyKey,
+            String requestFingerprint, DataIntegrityViolationException cause) {
+        CustomerOrder existing = orderRepository
+                .findByCustomer_IdAndIdempotencyKey(customerId, idempotencyKey)
+                .orElseThrow(() -> cause); // A different constraint failed; report it as-is.
+        return replayOf(existing, requestFingerprint);
+    }
+
+    private OrderCreationResult replayOf(CustomerOrder existing, String requestFingerprint) {
+        if (!existing.getRequestFingerprint().equals(requestFingerprint)) {
+            throw new ApiException(HttpStatus.CONFLICT, "IDEMPOTENCY_KEY_REUSED",
+                    "This checkout key was already used for a different request.");
+        }
+        return new OrderCreationResult(OrderResponse.from(existing,
+                orderItemRepository.findAllByOrder_IdOrderById(existing.getId())), true);
+    }
+
+    private OrderCreationResult placeOrder(AuthenticatedUser authenticatedUser, UUID idempotencyKey,
             CreateOrderRequest request) {
         rejectDuplicateLines(request.items());
         String requestFingerprint = fingerprint(request);
@@ -63,13 +109,7 @@ public class OrderService {
 
         var previousOrder = orderRepository.findByCustomer_IdAndIdempotencyKey(customer.getId(), idempotencyKey);
         if (previousOrder.isPresent()) {
-            CustomerOrder existing = previousOrder.get();
-            if (!existing.getRequestFingerprint().equals(requestFingerprint)) {
-                throw new ApiException(HttpStatus.CONFLICT, "IDEMPOTENCY_KEY_REUSED",
-                        "This checkout key was already used for a different request.");
-            }
-            return new OrderCreationResult(OrderResponse.from(existing,
-                    orderItemRepository.findAllByOrder_IdOrderById(existing.getId())), true);
+            return replayOf(previousOrder.get(), requestFingerprint);
         }
 
         Restaurant restaurant = restaurantService.findActive(request.restaurantId());

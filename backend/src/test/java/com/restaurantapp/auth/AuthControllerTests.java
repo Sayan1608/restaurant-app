@@ -91,6 +91,46 @@ class AuthControllerTests {
     }
 
     @Test
+    void passwordResetSignsOutSessionsOpenedWithTheOldPassword() throws Exception {
+        String email = "revoke-" + UUID.randomUUID() + "@example.test";
+        String oldPassword = "old password here";
+        userAccountRepository.saveAndFlush(new UserAccount(
+                "Revoke Customer", email, passwordEncoder.encode(oldPassword), UserRole.CUSTOMER));
+
+        MvcResult loginResult = mockMvc.perform(post("/api/auth/login")
+                        .with(csrf().asHeader())
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(new LoginRequest(email, oldPassword))))
+                .andExpect(status().isOk())
+                .andReturn();
+        MockHttpSession session = (MockHttpSession) loginResult.getRequest().getSession(false);
+        org.junit.jupiter.api.Assertions.assertNotNull(session);
+        mockMvc.perform(get("/api/auth/me").session(session)).andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/auth/forgot-password")
+                        .with(csrf().asHeader())
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(new PasswordResetRequest(email))))
+                .andExpect(status().isOk());
+        ArgumentCaptor<SimpleMailMessage> messageCaptor = ArgumentCaptor.forClass(SimpleMailMessage.class);
+        org.mockito.Mockito.verify(mailSender).send(messageCaptor.capture());
+        Matcher matcher = Pattern.compile("code is (\\d{6})").matcher(messageCaptor.getValue().getText());
+        org.junit.jupiter.api.Assertions.assertTrue(matcher.find());
+
+        mockMvc.perform(post("/api/auth/reset-password")
+                        .with(csrf().asHeader())
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(new PasswordResetConfirmation(
+                                email, matcher.group(1), "a brand new password"))))
+                .andExpect(status().isOk());
+
+        // The session opened with the old password must not outlive the reset.
+        mockMvc.perform(get("/api/auth/me").session(session))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("SESSION_EXPIRED"));
+    }
+
+    @Test
     void loginPersistsSessionAndCurrentUserCanBeRead() throws Exception {
         String email = "login-" + UUID.randomUUID() + "@example.test";
         String password = "correct horse battery";

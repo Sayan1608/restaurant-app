@@ -22,6 +22,8 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,7 +34,9 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.reset;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -52,17 +56,18 @@ class OrderCheckoutControllerTests {
     @Autowired private MenuCategoryRepository categoryRepository;
     @Autowired private MenuItemRepository menuItemRepository;
     @Autowired private UserAccountRepository userAccountRepository;
-    @Autowired private CustomerOrderRepository customerOrderRepository;
+    @MockitoSpyBean private CustomerOrderRepository customerOrderRepository;
     @MockitoSpyBean private OrderItemRepository orderItemRepository;
 
     private Restaurant restaurant;
+    private MenuCategory category;
     private MenuItem item;
     private UserAccount customer;
 
     @BeforeEach
     void setUp() {
         restaurant = restaurantRepository.saveAndFlush(new Restaurant("Checkout " + UUID.randomUUID(), null, "1 Test Road"));
-        MenuCategory category = categoryRepository.saveAndFlush(new MenuCategory(restaurant, "Mains", 0));
+        category = categoryRepository.saveAndFlush(new MenuCategory(restaurant, "Mains", 0));
         item = menuItemRepository.saveAndFlush(new MenuItem(category, "Paneer Bowl", "Rice and paneer",
                 new BigDecimal("49.99"), null));
         customer = userAccountRepository.saveAndFlush(new UserAccount("Test Customer",
@@ -161,6 +166,63 @@ class OrderCheckoutControllerTests {
 
         assertThat(customerOrderRepository.count()).isZero();
         assertThat(orderItemRepository.count()).isZero();
+    }
+
+    /**
+     * The unique index on (customer, idempotency key) is the real guard, so a request that loses the
+     * race must replay the winning order rather than surface the constraint violation as a 500.
+     * Runs outside a test transaction because the losing insert aborts the one it runs in.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void concurrentCheckoutWithTheSameKeyReplaysTheWinningOrder() throws Exception {
+        UUID key = UUID.randomUUID();
+        String body = checkoutBody(2);
+        try {
+            String winnerBody = mockMvc.perform(post("/api/orders")
+                            .with(user(AuthenticatedUser.from(customer))).with(csrf().asHeader())
+                            .header("Idempotency-Key", key)
+                            .contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+            UUID winnerId = UUID.fromString(objectMapper.readTree(winnerBody).path("id").asText());
+
+            // Make the pre-insert lookup miss exactly once, as it would for a request whose rival
+            // has not committed yet. The insert then hits the unique index for real, and the
+            // recovery re-read is served by a query this stub leaves alone.
+            AtomicBoolean firstLookup = new AtomicBoolean(true);
+            doAnswer(invocation -> firstLookup.getAndSet(false)
+                    ? Optional.empty()
+                    : customerOrderRepository.findDetailedById(winnerId))
+                    .when(customerOrderRepository).findByCustomer_IdAndIdempotencyKey(any(), any());
+
+            String replay = mockMvc.perform(post("/api/orders")
+                            .with(user(AuthenticatedUser.from(customer))).with(csrf().asHeader())
+                            .header("Idempotency-Key", key)
+                            .contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+
+            reset(customerOrderRepository);
+            assertThat(objectMapper.readTree(replay).path("id").asText())
+                    .isEqualTo(winnerId.toString());
+            assertThat(customerOrderRepository.count()).isEqualTo(1);
+        } finally {
+            reset(customerOrderRepository);
+            deleteCommittedFixtures();
+        }
+    }
+
+    /** This test commits, so it clears up after itself instead of leaving rows behind. */
+    private void deleteCommittedFixtures() {
+        customerOrderRepository.findAll().stream()
+                .filter(order -> order.getCustomer().getId().equals(customer.getId()))
+                .forEach(order -> {
+                    orderItemRepository.deleteAll(orderItemRepository.findAllByOrder_IdOrderById(order.getId()));
+                    customerOrderRepository.delete(order);
+                });
+        menuItemRepository.delete(item);
+        categoryRepository.delete(category);
+        restaurantRepository.delete(restaurant);
+        userAccountRepository.delete(customer);
     }
 
     @Test

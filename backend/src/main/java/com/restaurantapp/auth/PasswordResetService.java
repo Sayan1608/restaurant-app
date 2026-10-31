@@ -7,14 +7,20 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.security.core.session.SessionInformation;
+import org.springframework.security.core.session.SessionRegistry;
+import org.springframework.security.core.session.SessionRegistryImpl;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class PasswordResetService {
 
+    private static final Logger log = LoggerFactory.getLogger(PasswordResetService.class);
     private static final String GENERIC_MESSAGE = "If an account exists for that email, a verification code has been sent.";
     private static final Duration OTP_LIFETIME = Duration.ofMinutes(10);
     private static final Duration RESEND_COOLDOWN = Duration.ofSeconds(60);
@@ -34,30 +41,35 @@ public class PasswordResetService {
     private final PasswordEncoder passwordEncoder;
     private final Clock clock;
     private final OtpCodeGenerator otpCodeGenerator;
+    private final SessionRegistry sessionRegistry;
     private final String fromAddress;
 
     @Autowired
     public PasswordResetService(UserAccountRepository users, PasswordResetOtpRepository otps,
             JavaMailSender mailSender, PasswordEncoder passwordEncoder, OtpCodeGenerator otpCodeGenerator,
+            SessionRegistry sessionRegistry,
             @Value("${app.mail.from:noreply@restaurant.local}") String fromAddress) {
-        this(users, otps, mailSender, passwordEncoder, Clock.systemUTC(), otpCodeGenerator, fromAddress);
+        this(users, otps, mailSender, passwordEncoder, Clock.systemUTC(), otpCodeGenerator, sessionRegistry,
+                fromAddress);
     }
 
     PasswordResetService(UserAccountRepository users, PasswordResetOtpRepository otps,
             JavaMailSender mailSender, PasswordEncoder passwordEncoder, Clock clock,
             OtpCodeGenerator otpCodeGenerator) {
-        this(users, otps, mailSender, passwordEncoder, clock, otpCodeGenerator, "noreply@restaurant.local");
+        this(users, otps, mailSender, passwordEncoder, clock, otpCodeGenerator, new SessionRegistryImpl(),
+                "noreply@restaurant.local");
     }
 
     private PasswordResetService(UserAccountRepository users, PasswordResetOtpRepository otps,
             JavaMailSender mailSender, PasswordEncoder passwordEncoder, Clock clock,
-            OtpCodeGenerator otpCodeGenerator, String fromAddress) {
+            OtpCodeGenerator otpCodeGenerator, SessionRegistry sessionRegistry, String fromAddress) {
         this.users = users;
         this.otps = otps;
         this.mailSender = mailSender;
         this.passwordEncoder = passwordEncoder;
         this.clock = clock;
         this.otpCodeGenerator = otpCodeGenerator;
+        this.sessionRegistry = sessionRegistry;
         this.fromAddress = fromAddress;
     }
 
@@ -87,6 +99,8 @@ public class PasswordResetService {
                     .formatted(code));
             mailSender.send(message);
         } catch (RuntimeException exception) {
+            // The code is unusable if it was never delivered, so drop it and let the user request another.
+            log.warn("Password reset email could not be sent; the pending code was discarded.", exception);
             otps.delete(challenge);
             return new PasswordResetResponse(GENERIC_MESSAGE);
         }
@@ -115,7 +129,22 @@ public class PasswordResetService {
         account.setPasswordHash(passwordEncoder.encode(newPassword));
         users.save(account);
         otps.delete(challenge);
+        revokeActiveSessions(account);
         return new PasswordResetResponse("Your password has been reset. You can now sign in.");
+    }
+
+    /**
+     * Signs out everything already holding this account. Recovering an account is exactly when the
+     * owner believes access has been revoked, so a session opened with the old password must not
+     * outlive the reset.
+     */
+    private void revokeActiveSessions(UserAccount account) {
+        List<SessionInformation> sessions =
+                sessionRegistry.getAllSessions(AuthenticatedUser.from(account), false);
+        sessions.forEach(SessionInformation::expireNow);
+        if (!sessions.isEmpty()) {
+            log.info("Password reset revoked {} active session(s) for the account.", sessions.size());
+        }
     }
 
     private void validatePasswordLength(String password) {

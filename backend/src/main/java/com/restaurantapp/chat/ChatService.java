@@ -1,6 +1,8 @@
 package com.restaurantapp.chat;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.restaurantapp.common.ApiException;
 import com.restaurantapp.menu.MenuItemResponse;
 import com.restaurantapp.menu.MenuResponse;
@@ -19,6 +21,7 @@ import java.util.stream.Collectors;
 
 @Service
 public class ChatService {
+    private static final Logger log = LoggerFactory.getLogger(ChatService.class);
     private static final int MAX_REPLY_LENGTH = 2000;
     private final MenuService menuService;
     private final RestClient restClient;
@@ -37,6 +40,7 @@ public class ChatService {
 
     public ChatMessageResponse answer(UUID restaurantId, String message) {
         if (apiKey.isBlank()) {
+            log.warn("Chat request rejected: openrouter.api-key is not configured.");
             throw unavailable();
         }
         MenuResponse menu = menuService.getPublicMenu(restaurantId);
@@ -59,9 +63,13 @@ public class ChatService {
                                     Map.of("role", "user", "content", message))))
                     .retrieve().body(JsonNode.class);
             String reply = response == null ? null : response.path("choices").path(0).path("message").path("content").asText(null);
-            if (reply == null || reply.isBlank()) throw unavailable();
+            if (reply == null || reply.isBlank()) {
+                log.warn("OpenRouter returned no usable reply for model {}.", model);
+                throw unavailable();
+            }
             return new ChatMessageResponse(reply.length() > MAX_REPLY_LENGTH ? reply.substring(0, MAX_REPLY_LENGTH) : reply);
         } catch (RestClientException exception) {
+            log.warn("OpenRouter chat request failed for model {}.", model, exception);
             throw unavailable();
         }
     }

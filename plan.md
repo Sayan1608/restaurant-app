@@ -394,4 +394,28 @@ Step 7 is implemented: customers can view paginated order history and owner-only
 
 Ad hoc email OTP password recovery is implemented alongside authentication: users can request a code and set a new password from the sign-in modal. OTPs are BCrypt hashed, expire after 10 minutes, allow five failed attempts, and have a 60-second resend cooldown. The public request message is generic to reduce account enumeration. SMTP settings are environment-configured; mobile/SMS recovery is deferred because accounts do not have phone numbers.
 
-Next: Step 8 - Complete the admin dashboard and choose the MVP payment method. Steps 8-10 remain future work in the sequence above.
+Next: Step 8 - Complete the admin dashboard and choose the MVP payment method. Steps 8-10 remain future work in the sequence above. Settle the open items in section 9.1 first; items 1-3 there block useful admin-dashboard work.
+
+## 9.1 Open items to settle before Step 8
+
+Recorded 2026-10-30 after reviewing the repository against this plan and `docs/`. These are gaps between what the plan/docs claim and what the code does. Clear or consciously accept each one before starting Step 8, because the first three block any realistic admin-dashboard work.
+
+### 1. No way to create an ADMIN account (blocker for Step 8)
+
+`UserAccountService.register` always assigns `UserRole.CUSTOMER`, the `development` seeder creates no accounts, and no migration inserts one. The admin order desk and every `/api/admin/**` endpoint are therefore unreachable without manually updating `users.role` in SQL. `AGENTS.md` section 5 forbids a publicly accessible default admin with a committed password, so Step 8 needs a documented, local-only bootstrap - for example an environment-configured admin promotion on startup under the `development` profile, or a documented one-off SQL/CLI step in the README. Decide the mechanism before building admin screens.
+
+### 2. Admin menu management has no UI
+
+The admin category and menu-item APIs are complete and documented in `docs/restaurant-menu-api.md`, but the frontend only has the admin order desk in `order-center.tsx`. Step 8's "minimal admin dashboard for menu availability and incoming orders" is unbuilt on the menu side. The ordering half already exists and should be reused, not rewritten.
+
+### 3. `docs/local-validation-test-cases.md` is stale
+
+That file is dated 2026-10-20, records schema version 1 and 12 backend tests, and still states that "Restaurant/menu browsing and order placement endpoints are not implemented yet". It predates the menu, checkout, order-workflow, and OTP slices (now `V1`-`V3`). TC-01 to TC-18 cover the authentication slice only. Re-run and extend it, or mark it explicitly as an authentication-slice snapshot, so it stops reading as current end-to-end validation.
+
+### 4. Testcontainers is specified but not used
+
+Section 1 of this plan and `AGENTS.md` sections 2 and 9 name Testcontainers with PostgreSQL for integration tests. `backend/pom.xml` has no Testcontainers dependency and there is no `backend/src/test/resources`, so the `@SpringBootTest @ActiveProfiles("test")` suites run against the datasource from the root `.env` - the Compose database on port 5433, which must be running before `mvnw.cmd test`. Either add Testcontainers or amend the stated standard; until then, document the running-database prerequisite wherever test commands are listed.
+
+### 5. Payment state has no schema yet
+
+`docs/data-model.md` defers the `payments` table until a payment method needs persistent state, and checkout currently hard-codes tax and delivery fee to `0.00`. Step 8 task 1 (cash on delivery versus a provider test mode) determines whether a `V4` migration for payment method/status is required and whether the zero-fee assumption stays. Settle the payment decision before writing the migration, and keep payment status separate from order status per `AGENTS.md` section 5.
